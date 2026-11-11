@@ -16,11 +16,30 @@
 
 #include <gtest/gtest.h>
 #include <fr/json-rpc/Client.h>
+#include <iostream>
 
-int add(int x, int y);
-int subtract(int x, int y);
+// Declare some functions for the client
+// These do not actually need to be implemented.
 
-TEST(ClientTest, BasicTest) {
-  fr::json_rpc::Client<^^add> addClient;
-  std::cout << addClient.makeRequest(std::string("SomeId"), 4, 4) << std::endl;
+std::string ClientTestHello();
+
+TEST(ClientTest, RoundTrip) {
+  fr::json_rpc::Client<^^ClientTestHello> client;
+  // Set request ID to "helloTest"
+  std::string request = client.encode("helloTest");
+  ASSERT_EQ(request, "{\"jsonrpc\":\"2.0\",\"method\":\"ClientTestHello\",\"id\":\"helloTest\"}");
+  // Just set up a response to decode right now
+  fr::json_rpc::Response<^^ClientTestHello> response{"helloTest", "Hello Worlt!"};
+  std::string r = rfl::json::write(response);
+  ASSERT_EQ(client.decode(r), "Hello Worlt!");
+  ASSERT_EQ(client.lastId(), "helloTest");
+}
+
+TEST(ClientTest, Error) {
+  fr::json_rpc::Client<^^ClientTestHello> client;
+  fr::json_rpc::Response<^^ClientTestHello> response{"errorTest"};
+  response.error = fr::json_rpc::Error{-1, "An error occurred"};
+  std::string r = rfl::json::write(response);
+  EXPECT_THROW(client.decode(r), fr::json_rpc::Error);
+  ASSERT_EQ(client.lastId(), "errorTest");
 }

@@ -3,9 +3,11 @@ include(GoogleTest)
 enable_testing()
 
 set(TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/ClientTest.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/ServerTest.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/ParamsTest.cpp"
+  ${CMAKE_CURRENT_SOURCE_DIR}/ClientTest.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/FunctionTest.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/RequestTest.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ResponseTest.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ServerTest.cpp
 )
 
 add_executable(test

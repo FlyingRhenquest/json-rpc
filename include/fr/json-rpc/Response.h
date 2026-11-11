@@ -16,61 +16,76 @@
 
 #pragma once
 
-#include <string>
-#include <fr/autocereal/autocereal.h>
 #include <fr/json-rpc/Error.h>
 #include <meta>
-#include <sstream>
+#include <optional>
+#include <rfl.hpp>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace fr::json_rpc {
 
-  struct Error;
-
   /**
-   * unwrapRequestJson archives the individual elements of the structure
-   * individually so we get a correct JSON string for this response.
-   * autocereal likes to wrap objects encoded with my to_json function
-   * in an outer "value0" shell. Gonna have to fix that one of these
-   * days.
-   *
-   * Plus I need to change the error/result string based on the result.
-   * And I don't want to risk bumping heads with autocereal by trying
-   * to write a separate save function for these objects. It doesn't
-   * like having two encoding messages.
+   * You can pass this a function reflection or a response type reflection.
+   * The function refleciton will figure out the return type of the function.
+   * Generally you would use the an Error reflection if an error occurs.
    */
-  template <typename ResponseType>
-  std::string unwrapResponseJson(const ResponseType& response) {
-    std::stringstream stream;
-    {
-      cereal::JSONOutputArchive ar(stream);
-      ar(cereal::make_nvp("jsonrpc", response.jsonrpc));
-      if constexpr (std::is_same_v<typename ResponseType::resultType, Error>) {
-        ar(cereal::make_nvp("error", response.result));
-      } else {
-        ar(cereal::make_nvp("result", response.result));
-      }
-      if constexpr (std::meta::type_of(^^ResponseType::id) != ^^std::nullopt) {
-        if constexpr (std::meta::type_of(^^ResponseType::id) != ^^std::nullptr_t) {
-          ar(cereal::make_nvp("id", response.id));
+  template <std::meta::info Freflect>
+  struct Response {
+
+  private:
+    struct Info;
+
+    consteval {
+      std::vector<std::meta::info> spec;
+      if constexpr (std::meta::is_function(Freflect)) {
+        constexpr auto responseType = std::meta::return_type_of(Freflect);
+        constexpr auto identity = std::meta::substitute(^^std::type_identity, { responseType });
+        spec.push_back(std::meta::data_member_spec(identity, { .name = "ret" }));
+        if constexpr (is_void_type(responseType)) {
+          constexpr auto sanitizedResponseType = ^^bool;
+          constexpr auto sidentity = std::meta::substitute(^^std::type_identity, { sanitizedResponseType});
+          spec.push_back(std::meta::data_member_spec(sidentity, { .name = "s_ret"}));
         } else {
-          ar(cereal::make_nvp("id", "null"));
+          spec.push_back(std::meta::data_member_spec(identity, { .name = "s_ret"}));
         }
+      } else if constexpr (std::meta::is_type(Freflect)) {
+        constexpr auto identity = std::meta::substitute(^^std::type_identity, { Freflect });
+        spec.push_back(std::meta::data_member_spec(identity, { .name = "ret" }));
+        spec.push_back(std::meta::data_member_spec(identity, { .name = "s_ret" }));
+      } else {
+        static_assert(false, "Response type is not a function or a type");
+      }
+      std::meta::define_aggregate(^^Info, spec);
+    }
+
+    using IdentityType = typename [: std::meta::type_of(std::meta::nonstatic_data_members_of(^^Info, std::meta::access_context::unchecked())[0]) :];
+    // Cant use IdentityType in optional if return type is void
+    using SanitizedIdentityType = typename [: std::meta::type_of(std::meta::nonstatic_data_members_of(^^Info, std::meta::access_context::unchecked())[1]) :];
+    using SanitizedResultType = SanitizedIdentityType::type;
+
+  public:
+    using ResultType = IdentityType::type;
+    using IdType = std::optional<rfl::Generic>;
+    std::string jsonrpc = "2.0";
+    std::optional<SanitizedResultType> result = std::nullopt;
+    std::optional<Error> error = std::nullopt;
+    IdType id = std::nullopt;
+
+    constexpr Response(IdType id) : id(id) {
+    }
+
+    constexpr Response(IdType id, SanitizedResultType res) : id(id) {
+      if constexpr (std::is_same_v<Error, SanitizedResultType>) {
+        error = res;
+      } else {
+        result = res;
       }
     }
-    return stream.str();
-  }
 
-  /**
-   * Response type. This has all the things a JSON RPC Response needs!
-   * Make ResultType an Error if it's... an error. Feels like that
-   * should be obvious, but I thought I'd mention it.
-   */
-  template <typename ResultType, typename IdType>
-  struct Response {
-    using resultType = ResultType;
-    std::string jsonrpc = "2.0";
-    ResultType result;
-    IdType id;
+    constexpr Response() {}
+
   };
 
 }

@@ -17,17 +17,33 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fixed_string)
 
+set(REFLECTCPP_USE_STD_EXPECTED ON CACHE INTERNAL "Use std::expected for return values")
+set(REFLECTCPP_USE_CPP26_REFLECTION ON CACHE INTERNAL "Use C++26 Reflection")
 FetchContent_Declare(
-  autocereal
-  GIT_REPOSITORY https://github.com/FlyingRhenquest/autocereal.git
-  GIT_TAG origin/main
+  reflect-cpp
+  GIT_REPOSITORY https://github.com/munich-data-engineering/reflect-cpp.git
+  GIT_TAG v0.26.2
   FIND_PACKAGE_ARGS CONFIG
 )
-set(AUTOCEREAL_BUILD_TESTS OFF)
-FetchContent_MakeAvailable(autocereal)
+FetchContent_MakeAvailable(reflect-cpp)
+
+set(STDEXEC_BUILD_TESTS OFF CACHE INTERNAL "Disable stdexec tests" FORCE)
+set(STDEXEC_BUILD_EXAMPLES OFF CACHE INTERNAL "Disable stdexec tests" FORCE)
+FetchContent_Declare(
+  stdexec
+  GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
+  GIT_TAG main
+  FIND_PACKAGE_ARGS CONFIG
+)
+FetchContent_MakeAvailable(stdexec)
 
 set(INTERFACE_HEADERS
-  "include/fr/json-rpc/Server.h"
+  "include/fr/json-rpc/Client.h"
+  "include/fr/json-rpc/Error.h"
+  "include/fr/json-rpc/Function.h"
+  "include/fr/json-rpc/Helpers.h"
+  "include/fr/json-rpc/Request.h"
+  "include/fr/json-rpc/Response.h"
 )
 
 add_library(json-rpc INTERFACE)
@@ -37,10 +53,8 @@ target_include_directories(json-rpc INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(json-rpc INTERFACE fixed_string::fixed_string FR::autocereal)
+target_link_libraries(json-rpc INTERFACE fixed_string::fixed_string reflectcpp::reflectcpp STDEXEC::stdexec)
 
 add_library(FR::json-rpc ALIAS json-rpc)
 
 add_subdirectory(test)
-
-#add_subdirectory(examples)

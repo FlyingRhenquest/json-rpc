@@ -15,42 +15,33 @@
  */
 
 #include <gtest/gtest.h>
-#include <fr/json-rpc/Server.h>
+#include <format>
 #include <fr/json-rpc/Client.h>
+#include <fr/json-rpc/Server.h>
 
-int add(int x, int y) {
-  return x+y;
+// We're actually implementing some functions this time
+
+std::string ServerTestHello(std::string name) {
+  return std::format("Hello, {}!", name);
 }
 
-int subtract(int x, int y) {
-  return x - y;
+int ServerTestPlusTwo(int i) {
+  return i + 2;
 }
 
-std::string sayHello(std::string name) {
-  return std::string("Hello, ") + name;
-}
+TEST(ServerTest, RoundTrip) {
+  fr::json_rpc::Server<^^ServerTestHello, ^^ServerTestPlusTwo> server;
+  fr::json_rpc::Client<^^ServerTestHello> helloClient;
+  std::string helloRequest = helloClient.encode(1, "Worlt");
+  std::string helloResponse = server.request(helloRequest);
+  std::string helloResult = helloClient.decode(helloResponse);
+  ASSERT_EQ(helloResult, "Hello, Worlt!");
+  ASSERT_EQ(helloClient.lastId(), 1);
 
-int Steve(int x, int y);
-
-TEST(ServerTest, Basic) {
-  fr::json_rpc::Server<^^add, ^^subtract, ^^sayHello> services;
-  fr::json_rpc::Client<^^add> addClient;
-  fr::json_rpc::Client<^^subtract> subtractClient;
-  fr::json_rpc::Client<^^Steve> steveClient;
-  fr::json_rpc::Client<^^sayHello> helloClient;
-  std::string helloRequest = helloClient.makeRequest(std::string("helloTest"), "Worlt");
-  std::string addRequest = addClient.makeRequest(std::string("addId"), 2, 2);
-  auto addResult = services.request<std::string>(addRequest);
-  std::cout << addResult << std::endl;
-  EXPECT_EQ(addResult, fr::json_rpc::unwrapResponseJson(fr::json_rpc::Response<int, std::string>{ . result = 4, .id = "addId"}));
-  std::string subRequest = subtractClient.makeRequest(4,2,2);
-  auto subResult = services.request<int>(subRequest);
-  std::cout << subResult << std::endl;
-  EXPECT_EQ(subResult, fr::json_rpc::unwrapResponseJson(fr::json_rpc::Response<int, int>{.result = 0, .id = 4}));
-  std::string steveRequest = steveClient.makeRequest(std::string("Nope"), 4, 4);
-  auto noSuchMethod = services.request<std::string>(steveRequest);
-  EXPECT_EQ(noSuchMethod, fr::json_rpc::unwrapResponseJson(fr::json_rpc::Response<fr::json_rpc::Error, std::nullptr_t>{.result = { .code = -32601, .message = "Method \"Steve\" not found"}, .id = nullptr}));
-  std::cout << noSuchMethod << std::endl;
-  auto helloResponse = services.request<std::string>(helloRequest);
-  std::cout << helloResponse << std::endl;
+  fr::json_rpc::Client<^^ServerTestPlusTwo> plusClient;
+  std::string plusRequest = plusClient.encode(2, 42);
+  std::string plusResponse = server.request(plusRequest);
+  int plusResult = plusClient.decode(plusResponse);
+  ASSERT_EQ(plusResult, 44);
+  ASSERT_EQ(plusClient.lastId(), 2);
 }

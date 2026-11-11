@@ -21,13 +21,7 @@
 namespace fr::json_rpc {
 
   /**
-   * Error types, if you want to use them. Autocereal also doesn't
-   * know how to deal with these yet, so I'll make the code in Error a
-   * plain ol' int. It's kind of a pain in the ass to have to
-   * static_cast it, but I'd be inclined to make autocereal use the
-   * identifier for enums anyway, and JSON RPC wants an int in the
-   * error code.
-   *
+   * JSON-RPC Errors
    */
   enum class ERRORS : int {
     PARSE_ERROR = -32700,
@@ -43,7 +37,9 @@ namespace fr::json_rpc {
   struct Error {
     int code;
     std::string message;
-  };
 
+    Error(ERRORS error, std::string msg = "") : code(static_cast<int>(error)), message(msg) {}
+    Error(int error, std::string msg = "") : code(error), message(msg) {}
+  };
 
 }
