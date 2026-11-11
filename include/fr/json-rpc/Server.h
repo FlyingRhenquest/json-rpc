@@ -11,160 +11,95 @@
  * GNU Affero General Public License for more details.
 
  * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #pragma once
-#include <array>
+
 #include <fixed_string.hpp>
-#include <functional>
-#include <format>
-#include <meta>
-#include <fr/autocereal/autocereal.h>
+#include <fr/json-rpc/Function.h>
 #include <fr/json-rpc/Helpers.h>
 #include <fr/json-rpc/Request.h>
 #include <fr/json-rpc/Response.h>
-#include <string>
+#include <functional>
+#include <meta>
+#include <ranges>
 
 namespace fr::json_rpc {
 
   /**
-   * ServiceHandler; created with the name of the method and a function
-   * ref to the function to be called.
+   * Server can handle calls for multiple functions. Current design matches on
+   * function name, so overloading isn't allowed.
    */
-  template <fixstr::fixed_string Method, std::meta::info Function>
-  struct ServiceHandler {
-    struct handler;
-    static constexpr auto name = Method;
-    using FunctionSig = [: std::meta::type_of(Function) :];
-    using ReturnType = typename[: std::meta::return_type_of(Function) :];
-
-    std::function_ref<FunctionSig> function  = [: Function :];
-
-    /**
-     * Call the function with some arguments. We encode to json here
-     * so the return type can be the same in all cases. If you want to
-     * customize your error response, you can throw a json_rpc::Error
-     * and I'll wrap it in a Response for you.
-     */
-    template <typename IdType>
-    std::string call(const std::string& req) {
-      Request<Function, IdType> request;
-      try {
-        request.decode(req);
-        Response<ReturnType, IdType> response{
-          .result = std::apply(function, request.params.tieParams()),
-          .id = request.id
-        };
-        return unwrapResponseJson(response);
-      } catch (std::exception &e) {
-        Error err{
-          .code = static_cast<int>(ERRORS::INTERNAL_ERROR),
-          .message = e.what()
-        };
-        Response<Error, IdType> whoopsie {
-          .result = err,
-          .id = request.id
-        };
-        return unwrapResponseJson(whoopsie);
-      } catch (Error &e) {
-        Response<Error, IdType> whoopsie {
-          .result = e,
-          .id = request.id
-        };
-        return unwrapResponseJson(whoopsie);
-      }
-      return std::string("");
-    }
-
-  };
-
-  /**
-   * A JSON RPC Server. Um... backend kinda thing. It doesn't
-   * actually have a protocol. But you can stick functions
-   * in it and then call its "request" method and get
-   * a JSON-RPC response back, so that's *most* of the battle,
-   * anyway. I'll probably handle the protocol with proxy objects
-   * or something that take terminal input or pistache routes
-   * and converts them into request calls to this Server
-   * object.
-   *
-   * How do you... oh yeah. Write a function,
-   * create a server with a reflection to your function
-   * and then call server.request(id, function name, function parameters...)
-   *
-   * The JSON RPC guys thought they'd be cute and let ID be multiple
-   * possible types, so ID can be multiple possible types. Cereal doesn't
-   * like char arrays, so if you want your IDs to be strings, make sure
-   * C++ knows they're std::strings.
-   */
-  template <auto... ServiceObjects>
+  template <std::meta::info... ServiceObjects>
   class Server {
-  protected:
-    struct Handlers;
+    // Struct for use by reflect-cpp to extract just the method name from the
+    // request.
+    using IdType = std::optional<rfl::Generic>;
 
-    /**
-     * Unwrap all my service object function reflections and rebundle them
-     * as service handlers with std::function_refs pointing to the functions.
-     * Stuff them all in a Handlers structure, with the service handler
-     * name for that specific function being the name of the function.
-     * So if you create a Server<^^add>, handlers will have one "add" member,
-     * which is a ServiceHandler and which holds a std::function_ref that
-     * points at your function.
-     */
-    consteval {
-      std::vector<std::meta::info> handlerSpecs;
-      template for (constexpr auto ServiceObject : ServicePack<ServiceObjects...>::objects) {
-        if constexpr (std::meta::is_function(ServiceObject)) {
-          constexpr auto name = std::meta::identifier_of(ServiceObject);
-          constexpr auto methodName = to_fixed_string<name.size()>(name);
-          constexpr auto functionValue =
-            std::meta::reflect_constant(&[:ServiceObject:]);
-          constexpr auto HandlerTypeInfo = std::meta::substitute(^^ServiceHandler, {
-              std::meta::reflect_constant(methodName),
-              ^^ServiceObject
-            });
-          handlerSpecs.push_back(std::meta::data_member_spec(HandlerTypeInfo, {.name = methodName}));
-        } else {
-          static_assert(false, "Object types other than functions are not supported yet.");
-        }
-      }
-      std::meta::define_aggregate(^^Handlers, handlerSpecs);
+    struct Method {
+      std::string method;
+    };
+
+    // Struct used by reflect-cpp to extract just the ID from the request
+    struct Id {
+      IdType id;
+    };
+
+    const std::string getMethod(const std::string& json) {
+      std::string method;
+      auto m = rfl::json::read<Method>(json);
+      if (m.has_value()) {
+        method = m->method;
+      };
+      return method;
     }
 
-    /**
-     * Actually create a handlers member for all the handlers we
-     * just defiend in that consteval loop up there.
-     */
-    Handlers handlers;
+    void errorFn() {};
+
   public:
-    /**
-     * Make a request to a function that this server handles. Returns a response from a function
-     * or an error response.
-     */
-    template <typename IdType>
-    constexpr std::string request(const std::string& req) {
-      constexpr static auto ctx = std::meta::access_context::unchecked();
-      constexpr static auto reflections = std::define_static_array(std::meta::nonstatic_data_members_of(^^Handlers, ctx));
-      const std::string routing = requestRouting(req);
-      std::string_view routingView{routing};
-      // Iterate through the handlers we created and see if we have a match for the
-      // requested name. If so, we can just substitute the handler to call
-      // the function it's pointing at, which is nice and convenient
-      template for (constexpr auto handler : reflections) {
-        if (routingView == std::meta::identifier_of(handler)) {
-          return handlers.[: handler :].template call<IdType>(req);
+
+    std::string request(std::string req) {
+      std::string method = getMethod(req);
+      std::string result = "";
+      template for (constexpr size_t i : std::views::iota(0u, sizeof...(ServiceObjects))) {
+        if (method == std::meta::identifier_of(ServiceObjects...[i])) {
+          using fn = [: std::meta::type_of(ServiceObjects...[i]) :];
+          auto request = rfl::json::read<Request<ServiceObjects...[i]>>(req);
+          if (request.has_value()) {
+            Response<ServiceObjects...[i]> response;
+            response.id = request->id;
+            Function<ServiceObjects...[i]> function;
+            function.setParams(*request->params);
+            if constexpr (std::is_void_v<typename Response<ServiceObjects...[i]>::ResultType>) {
+              try {
+                std::function_ref<typename Function<ServiceObjects...[i]>::Signature> ref = [: ServiceObjects...[i] :];
+                std::apply(ref, function.tieParams());
+              } catch (std::exception &e) {
+                response.Error = Error{ERRORS::INTERNAL_ERROR, e.what()};
+              }
+            } else {
+              try {
+                std::function_ref<typename Function<ServiceObjects...[i]>::Signature> ref = [: ServiceObjects...[i] :];
+                response.result = std::apply(ref, function.tieParams());
+              } catch (std::exception &e) {
+                response.error = Error{ERRORS::INTERNAL_ERROR, e.what()};
+              }
+            }
+            result = rfl::json::write(response);
+          }
         }
       }
-      Error err{
-        .code = static_cast<int>(ERRORS::METHOD_NOT_FOUND),
-        .message = std::format("Method \"{}\" not found", routing)
-      };
-      Response<Error, std::nullptr_t> response {
-        .result = err,
-        .id = nullptr
-      };
-      return unwrapResponseJson(response);
+      if (result.empty()) {
+        auto id = rfl::json::read<Id>(req);
+        if (id.has_value()) {
+          Response<^^errorFn> response;
+          response.id = id.value().id;
+          response.error = Error{ERRORS::METHOD_NOT_FOUND, method};
+          result = rfl::json::write(response);
+        }
+      }
+      return result;
     }
   };
 

@@ -16,41 +16,10 @@
 
 #pragma once
 #include <fixed_string.hpp>
+#include <meta>
 #include <string_view>
-#include <fr/json-rpc/Params.h>
 
 namespace fr::json_rpc {
-
-  template <typename RT>
-  struct FunctionRefInfo;
-
-  /**
-   * Template to query function ref return type
-   */
- template <typename RT, typename... Args>
-  struct FunctionRefInfo<std::function_ref<RT(Args...)>> {
-    using type = RT;
-  };
-
-  /**
-   * Helper to pack Service Objects into an array for later unpacking
-   * Otherwise C++ complains about not having a constexpr value if
-   * you try to unpack them in a function that contains your
-   * "template for"
-   */
-  template <auto... ServiceObjects>
-  struct ServicePack {
-    static constexpr std::array objects = {ServiceObjects...};
-  };
-
-  /**
-   * Helper to pack Parameters into a static array, for Params object.
-   */
-  template <std::meta::info Function>
-  struct Parameters {
-    static constexpr auto params = std::define_static_array(std::meta::parameters_of(Function));
-  };
-
 
   /**
    * Convert a std::string_view to a fixstr::fixed_string.

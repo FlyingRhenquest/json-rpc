@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright 2026 Bruce Ide
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,100 +16,58 @@
 
 #pragma once
 
-#include <string>
-#include <fr/autocereal/autocereal.h>
-#include <fr/json-rpc/Error.h>
-#include <fr/json-rpc/Helpers.h>
+#include <fr/json-rpc/Function.h>
 #include <meta>
-#include <sstream>
-#include <stdexcept>
+#include <optional>
+#include <rfl.hpp>
+#include <string>
 
 namespace fr::json_rpc {
 
   /**
-   * unwrapResponseJson encodes the Response as a JSON string. We need
-   * special handling for the various bits and don't want to write a
-   * archiver for it as autocereal already has one and will get confused.
+   * Request for a specific function.
+   *
+   * Note that the function does not actually need to be
+   * defined anywhere in your executable, only declared.
+   * So if you have a header for it, you can encode
+   * a request for the function.
+   *
+   * This uses an optional reflect-cpp Generic object
+   * for ID, since ID can be optional and can also
+   * be null, int or a string. If you do not want
+   * an ID in your request, used std::nullopt for the
+   * ID. If you want it to be null, use std::monostate.
    */
-  template <typename RequestType>
-  std::string unwrapRequestJson(const RequestType& request) {
-    static const std::string method(RequestType::method);
-    std::stringstream stream;
-    {
-      cereal::JSONOutputArchive ar(stream);
-      ar(cereal::make_nvp("jsonrpc", request.jsonrpc));
-      ar(cereal::make_nvp("method", method));
-      if constexpr (!RequestType::ParamsType::isEmpty) {
-        ar(cereal::make_nvp("params", request.params.impl));
-      }
-      if constexpr (std::meta::type_of(^^RequestType::id) != ^^std::nullopt) {
-        if constexpr (std::meta::type_of(^^RequestType::id) != ^^std::nullptr_t) {
-          ar(cereal::make_nvp("id", request.id));
-        } else {
-          ar(cereal::make_nvp("id", "null"));
-        }
-      }
-    }
-    return stream.str();
-  }
 
-  // Unpack the method name from a request JSON
-  inline const std::string requestRouting(const std::string &json) {
-    std::stringstream stream(json);
-    std::string method;
-    {
-      cereal::JSONInputArchive ar(stream);
-      std::string rpcver;
-      ar(rpcver);
-      ar(method);
-    }
-    return method;
-  }
-
-  /**
-   * Request type
-   */
-  template <std::meta::info Function, typename IdType>
-  struct Request {
-    using ParamsType = Params<Function>;
+  template <std::meta::info Freflect> struct Request {
+    using ParamsType = Function<Freflect>::Params;
+    using IdType = std::optional<rfl::Generic>;
     std::string jsonrpc = "2.0";
-    static constexpr auto method = to_fixed_string<std::meta::identifier_of(Function).size()>(std::meta::identifier_of(Function));
-    ParamsType params;
+    std::string method = std::string{std::meta::identifier_of(Freflect)};
+    std::optional<ParamsType> params = std::nullopt;
     IdType id;
 
+    /**
+     * Create a request for a function with the arguments supplied.
+     * This object can be serialized immediately with rfl::json::write
+     * after it's been created.
+     *
+     * If you want ID to not show up at all in the JSON, use std::nullopt.
+     * If you want ID to be a null, use std::monostate.
+     */
     template <typename... Args>
-    constexpr Request(IdType id, Args&&... args) : params(args...), id(id) {}
-
-    Request() {}
-
-    void decode(const std::string& json) {
-      std::stringstream stream(json);
-      {
-        cereal::JSONInputArchive ar(stream);
-        std::string rpcver;
-        ar(rpcver);
-        if (rpcver != jsonrpc) {
-          Error err(static_cast<int>(ERRORS::INVALID_REQUEST), "Unspported JSON-RPC Version");
-          throw err;
-        }
-        std::string m;
-        ar(m);
-        if (method != std::string_view(m)) {
-                    Error err(static_cast<int>(ERRORS::METHOD_NOT_FOUND), "Invalid method name");
-          throw err;
-        }
-        if constexpr (!ParamsType::isEmpty) {
-          ar(params.impl);
-        }
-        if constexpr (std::meta::type_of(^^id) != ^^std::nullopt) {
-          if constexpr (std::meta::type_of(^^id) != ^^std::nullptr_t) {
-            ar(id);
-          } else {
-            id = nullptr;
-          }
-        }
+    constexpr Request(IdType id, Args&&... args) : id(id) {
+      if constexpr (0 != Function<Freflect>::nparams) {
+        ParamsType p;
+        Function<Freflect>::initParams(p, args...);
+        params = p;
       }
     }
+
+    /**
+     * Create an empty request (Params and ID must be initted before use)
+     */
+    Request() {}
   };
 
 }
