@@ -28,13 +28,13 @@ Servers take JSON string requests which you can generate from a client.
 
 ```
 fr::json_rpc::Client<^^Add> addClient;
-// The first parameter to makeRequest is an ID, which can be a string, an int or nullptr.
+// The first parameter to makeRequest is an ID, which can be a string, an int, a std::nullopt
+// or a std::monostate
 std::string addRequest = addClient.encode(std::string("addTest"), 2, 2);
 
 // Retrieve the JSON Result from the server
-// Currently we have to tell it the type of the request ID
 
-std::string addResponse = addServer.request<std::string>(addRequest);
+std::string addResponse = addServer.request(addRequest);
 std::cout << addRequest << std::endl << addResponse << std::endl;
 ```
 
@@ -51,14 +51,21 @@ returned, or an Error. If an error is returned, Decode will throw the error.
   ASSERT_EQ(helloClient.lastId(), 1);
 ```
 
-That's pretty much it. Take a look at the unit tests (Esp. ServerTest.cpp)
-for a full example.
+## Stdexec-based Pipelines
+
+I just wrote the first one of these, a simple in-place pipeline.
+`fr::json_rpc::pipelines::InProcess accepts a client and a server, an ID to pass to
+the client and the parameters to pass to the client. It returns a stdexec pipeline
+that can be scheduled to call the server and the client in the same process.
+See the PipelinesTest for an example. It's very basic, but it'll be a while
+before I really have my head wrapped around the library. I'll work my way
+up to increasingly complex ones as I have time.
 
 ## Todos:
 
 Oh tons of stuff
 
- * Transports -- I'm planning to use nvidia's stdexec for this.
+ * Moar Pipelines!
  * Haven't tested with complex structs as parameters, but that should work.
  * More tests
  * Actually useful examples

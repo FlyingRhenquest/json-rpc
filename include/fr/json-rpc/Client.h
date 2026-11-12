@@ -35,8 +35,10 @@ namespace fr::json_rpc {
 
   template <std::meta::info Freflect>
   struct Client {
-  private:
     using IdType = std::optional<rfl::Generic>;
+    using ReturnType = [: std::meta::return_type_of(Freflect) :];
+
+  private:
     IdType _lastId;
 
   public:

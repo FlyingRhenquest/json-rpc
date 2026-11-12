@@ -7,6 +7,7 @@ set(TEST_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/FunctionTest.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/RequestTest.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ResponseTest.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/PipelinesTest.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ServerTest.cpp
 )
 

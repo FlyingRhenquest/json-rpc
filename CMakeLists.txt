@@ -42,8 +42,10 @@ set(INTERFACE_HEADERS
   "include/fr/json-rpc/Error.h"
   "include/fr/json-rpc/Function.h"
   "include/fr/json-rpc/Helpers.h"
+  "include/fr/json-rpc/Pipelines.h"
   "include/fr/json-rpc/Request.h"
   "include/fr/json-rpc/Response.h"
+  "include/fr/json-rpc/Server.h"
 )
 
 add_library(json-rpc INTERFACE)
