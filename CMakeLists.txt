@@ -29,6 +29,7 @@ FetchContent_MakeAvailable(reflect-cpp)
 
 set(STDEXEC_BUILD_TESTS OFF CACHE INTERNAL "Disable stdexec tests" FORCE)
 set(STDEXEC_BUILD_EXAMPLES OFF CACHE INTERNAL "Disable stdexec tests" FORCE)
+set(STDEXEC_ENABLE_ASIO ON CACHE INTERNAL "Enable ASIO support" FORCE)
 FetchContent_Declare(
   stdexec
   GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
@@ -36,6 +37,10 @@ FetchContent_Declare(
   FIND_PACKAGE_ARGS CONFIG
 )
 FetchContent_MakeAvailable(stdexec)
+
+find_package(Boost REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(uring REQUIRED IMPORTED_TARGET liburing)
 
 set(INTERFACE_HEADERS
   "include/fr/json-rpc/Client.h"
@@ -55,7 +60,9 @@ target_include_directories(json-rpc INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(json-rpc INTERFACE fixed_string::fixed_string reflectcpp::reflectcpp STDEXEC::stdexec)
+target_link_libraries(json-rpc INTERFACE fixed_string::fixed_string reflectcpp::reflectcpp STDEXEC::stdexec Boost::headers PkgConfig::uring)
+
+target_compile_definitions(json-rpc INTERFACE STDEXEC_ASIO_USES_BOOST BOOST_ASIO_HAS_IO_URING BOOST_ASIO_DISABLE_EPOLL)
 
 add_library(FR::json-rpc ALIAS json-rpc)
 

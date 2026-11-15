@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <fixed_string.hpp>
+#include <concepts>
 #include <fr/json-rpc/Function.h>
 #include <fr/json-rpc/Helpers.h>
 #include <fr/json-rpc/Request.h>
@@ -27,16 +27,24 @@
 
 namespace fr::json_rpc {
 
+  template <typename T>
+  concept RpcServer = requires(T server, std::string request) {
+    typename T::IdType;
+    { server.request(request) } -> std::same_as<std::string>;
+  };
+
   /**
    * Server can handle calls for multiple functions. Current design matches on
    * function name, so overloading isn't allowed.
    */
   template <std::meta::info... ServiceObjects>
   class Server {
+  public:
     // Struct for use by reflect-cpp to extract just the method name from the
     // request.
     using IdType = std::optional<rfl::Generic>;
 
+  private:
     struct Method {
       std::string method;
     };

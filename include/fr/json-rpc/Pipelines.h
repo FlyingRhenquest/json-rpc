@@ -16,9 +16,15 @@
 
 #pragma once
 
+#include <boost/asio.hpp>
+#include <boost/asio/posix/stream_descriptor.hpp>
+#include <exec/asio/use_sender.hpp>
+#include <exec/asio/asio_thread_pool.hpp>
 #include <fr/json-rpc/Client.h>
 #include <fr/json-rpc/Server.h>
+#include <iostream>
 #include <stdexec/execution.hpp>
+#include <string>
 
 namespace fr::json_rpc::pipelines {
 
@@ -30,6 +36,7 @@ namespace fr::json_rpc::pipelines {
    */
 
   template <typename Client, typename Server, typename... Args>
+  requires RpcClient<Client> && RpcServer<Server>
   auto InProcess(Client& client,
                  Server& server,
                  typename Client::IdType id,

@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#include <concepts>
 #include <fr/json-rpc/Error.h>
 #include <fr/json-rpc/Function.h>
 #include <fr/json-rpc/Request.h>
@@ -24,6 +25,13 @@
 #include <stdexcept>
 
 namespace fr::json_rpc {
+
+  template <typename T, typename... Args>
+  concept RpcClient = requires(T client, typename T::IdType id, Args&&... args, std::string response) {
+    typename T::IdType;
+    { client.encode(id, std::forward<Args>(args)...) } -> std::same_as<std::string>;
+    { client.decode(response) };
+  };
 
   /**
    * Our client. This takes a reflection of one function and encodes
